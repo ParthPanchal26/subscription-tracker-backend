@@ -34,7 +34,7 @@ const subscriptionSchema = mongoose.Schema({
         required: true,
         trim: true,
     },
-    status: {
+    status: {   
         type: String,
         enum: ['active', 'cancelled', 'expired'],
         default: 'active',
@@ -51,12 +51,11 @@ const subscriptionSchema = mongoose.Schema({
     },
     renewalDate: {
         type: Date,
-        required: true,
         validate: {
             validator: function (value) {
                 return value > this.startDate
             },
-            message: 'Renual data must be after start date!',
+            message: 'Renewal date must be after start date!',
         }
     },
     subscriber: {

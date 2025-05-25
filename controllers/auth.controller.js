@@ -27,7 +27,9 @@ export const signUp = async (req, res, next) => {
         await session.commitTransaction()
         session.endSession()
 
-        res.status(201).json({
+        res.status(201).cookie('token', token, {
+            maxAge: 900000, httpOnly: true
+        }).json({
             success: true,
             message: "User created successfully",
             user: {
