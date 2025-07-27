@@ -9,9 +9,22 @@ export const signUp = async (req, res, next) => {
     session.startTransaction()
 
     try {
-        const { name, email, password } = req.body;
+        const { name, email, password, client } = req.body;
 
-        const existingUser = await User.findOne({ email })
+        if (!client) {
+            const error = new Error("Client type is required (web OR mobile)");
+            error.status = 400;
+            throw error;
+        }
+
+        if (client !== "web" && client !== "mobile") {
+            const error = new Error("Invalid client type");
+            error.status = 400;
+            throw error;
+        }
+
+        const existingUser = await User.findOne({ email });
+
         if (existingUser) {
             const error = new Error("User already exist! Please Sign-In!");
             error.status = 409;
@@ -27,18 +40,34 @@ export const signUp = async (req, res, next) => {
         await session.commitTransaction()
         session.endSession()
 
-        res.status(201).cookie('token', token, {
-            maxAge: 900000, httpOnly: true
-        }).json({
-            success: true,
-            message: "User created successfully",
-            user: {
-                token,
-                user: newUsers[0]
-            }
-        })
+        const userObj = newUsers[0].toObject();
+        delete userObj.password;
+
+        if (client === 'web') {
+            res.cookie('token', token, {
+                httpOnly: true,
+                secure: true,
+                sameSite: 'strict',
+                maxAge: 60 * 60 * 1000 * 24
+            });
+
+            return res.status(201).json({
+                success: true,
+                message: "User created successfully",
+                auth: { user: userObj }
+            });
+        }
+
+        if (client === 'mobile') {
+            return res.status(201).json({
+                success: true,
+                message: "User created successfully",
+                auth: { token: token, user: userObj }
+            })
+        }
+
     } catch (error) {
-        session.abortTransaction()
+        await session.abortTransaction()
         session.endSession()
         next(error)
     }
@@ -46,11 +75,24 @@ export const signUp = async (req, res, next) => {
 
 export const signIn = async (req, res, next) => {
     try {
-        const { email, password } = req.body;
+        const { email, password, client } = req.body;
 
-        const user = await User.findOne({ email })
+        if (!client) {
+            const error = new Error("Client type is required (web OR mobile)");
+            error.status = 400;
+            throw error;
+        }
+
+        if (client !== "web" && client !== "mobile") {
+            const error = new Error("Invalid client type");
+            error.status = 400;
+            throw error;
+        }
+
+        let user = await User.findOne({ email }).select('+password')
+
         if (!user) {
-            const error = new Error("User does not exist! Please Sign-Up!");
+            const error = new Error("Invalid email or password");
             error.status = 404;
             throw error;
         }
@@ -58,23 +100,43 @@ export const signIn = async (req, res, next) => {
         const isPasswordCorrect = await bcrypt.compare(password, user.password);
 
         if (!isPasswordCorrect) {
-            const error = new Error("Invalid Password!");
+            const error = new Error("Invalid email or Password!");
             error.status = 400;
             throw error;
         }
 
         const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
 
-        res.status(200).cookie('token', token, {
-            maxAge: 900000, httpOnly: true
-        }).json({
-            success: true,
-            message: "User signed in successfully!",
-            data: {
-                token,
-                user
-            }
-        })
+        const userObj = user.toObject();
+        delete userObj.password;
+
+        if (client === 'web') {
+            res.cookie('token', token, {
+                httpOnly: true,
+                secure: true,
+                sameSite: 'strict',
+                maxAge: 60 * 60 * 1000 * 24
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: "User signed successfully",
+                auth: {
+                    user: userObj
+                }
+            });
+        }
+
+        if (client === 'mobile') {
+            return res.status(200).json({
+                success: true,
+                message: "User signed in successfully!",
+                auth: {
+                    token: token,
+                    user: userObj
+                }
+            })
+        }
 
     } catch (error) {
         next(error)
@@ -82,8 +144,11 @@ export const signIn = async (req, res, next) => {
 }
 
 export const signOut = (req, res) => {
-    res.status(200).cookie('token', '').json({
-        success: true,
-        message: "User signed out successfully"
-    })
+    res.clearCookie('token', {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'strict'
+    }).status(200).json({
+        message: 'User signed out successfully'
+    });
 }
