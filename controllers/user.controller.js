@@ -12,7 +12,7 @@ export const getUsers = async (req, res, next) => {
 
         res.status(200).json({
             success: true,
-            data: users
+            users: users
         })
 
     } catch (error) {
@@ -32,7 +32,7 @@ export const getUserById = async (req, res, next) => {
 
         res.status(200).json({
             success: true,
-            data: user
+            user: user
         })
 
     } catch (error) {
